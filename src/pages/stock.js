@@ -1,29 +1,53 @@
+import React, { useEffect, useState } from 'react';
 import { fetchStockData } from '../utils/alphaVantage';
+import Layout from '../components/Layout';
+import StockTable from '../components/StockTable';
 
-//  import the fetchStockData function from the alphaVantage.js file.
+export default function StockPage() {
+  const [stockData, setStockData] = useState([]);
+  const [error, setError] = useState('');
 
+  useEffect(() => {
+    async function getData() {
+      try {
+        const data = await fetchStockData('AAPL');
+        if (!data || !data['Time Series (Daily)']) {
+          throw new Error('Invalid data format');
+        }
+        const timeSeries = data['Time Series (Daily)'];
+        
+        // Convert the time series data to an array of stock objects
+        const processedData = Object.keys(timeSeries)
+          .slice(0, 30) // Fetch the last 30 days of data
+          .map(date => ({
+            name: 'AAPL', // Since you're fetching AAPL data
+            price: parseFloat(timeSeries[date]['4. close']),
+            quantity: 10, // This could be a dynamic value if you have the data
+            total: parseFloat(timeSeries[date]['4. close']) * 10 // Price * quantity
+          }));
+        
+        // Calculate total value
+        const totalValue = processedData.reduce((acc, stock) => acc + stock.total, 0);
 
-export async function getServerSideProps() {
-    const symbol = 'AAPL'; // You can change this to any stock symbol you'd like to track
-    const data = await fetchStockData(symbol);
-  
-    return {
-      props: { // This is where you define the props that the component will receive
-        stockData: data,
-      },
-    };
-  }
-  
-  export default function StockPage({ stockData }) {
-    return (
-      <div>
-        <h1>Stock Data for AAPL</h1>
-        <pre>{JSON.stringify(stockData, null, 2)}</pre>
-      </div>
-    );
-  }
+        setStockData({ stocks: processedData, totalValue });
+      } catch (err) {
+        console.error(err);
+        setError('Failed to fetch stock data');
+      }
+    }
 
+    getData();
+  }, []);
 
-
-
-// Use the getServerSideProps function to fetch the stock data when the page is requested. This ensures that the data is fetched on the server and passed to the page as props.
+  return (
+    <Layout>
+      <h2 className="text-2xl font-semibold mb-4">AAPL Stock Overview</h2>
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+      {stockData.stocks ? (
+        <StockTable stocks={stockData.stocks} totalValue={stockData.totalValue} />
+      ) : (
+        <p>Loading stock data...</p>
+      )}
+    </Layout>
+  );
+}
